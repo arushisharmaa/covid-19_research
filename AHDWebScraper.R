@@ -52,7 +52,7 @@ tx_hosp_names = df_sub %>%
   mutate(across('NAME', str_replace_all, "%26", "&")) %>%
   mutate(across('NAME', str_replace_all, "%27", "'"))
 
-write.csv(df_sub, "all_TX_hospital_urls.csv", row.names=F)
+write.csv(tx_hosp_names, "all_TX_hospital_urls.csv", row.names=F)
 
 # open one hospital page
 open_hosp_profile = read_html(paste0("https://www.ahd.com", df_sub$href[1]))
