@@ -34,9 +34,9 @@ tx_search = read_html("https://www.ahd.com/list_cms.php?mstate%5B%5D=TX&listing=
 
 # turn list of urls into a dataframe
 df = bind_rows(lapply(xml2::xml_attrs(tx_search), 
-                      function(x) 
-                        data.frame(as.list(x), 
-                                   stringsAsFactors=FALSE)))
+                 function(x) 
+                   data.frame(as.list(x), 
+                              stringsAsFactors=FALSE)))
 
 # get only urls for the free profiles
 df_sub = df %>%
@@ -54,17 +54,19 @@ tx_hosp_names = df_sub %>%
 
 write.csv(tx_hosp_names, "all_TX_hospital_urls.csv", row.names=F)
 
-# https://www.ahd.com/free_profile/450890/_Baylor_Scott_%26_White_Medical_Center__Plano/Plano/Texas/
-open_hosp_free_profile = read_html(paste0("https://www.ahd.com/free_profile", CCN, + "/" + NAME
-                                          + "/" + CITY + "/" + CITY + "/" + STATE))
+# open one hospital page
+open_hosp_profile = read_html(paste0("https://www.ahd.com", df_sub$href[1]))
 
-
+test = open_hosp_profile %>% 
+  html_element("table")
+                               
+  
 # get info about hospital and put in a data frame with column header
 # turn list of urls into a dataframe
 hosp_data = bind_rows(lapply(xml2::xml_attrs(test), 
-                             function(x) 
-                               data.frame(as.list(x), 
-                                          stringsAsFactors=FALSE)))
+                      function(x) 
+                        data.frame(as.list(x), 
+                                   stringsAsFactors=FALSE)))
 
 
 
@@ -88,6 +90,7 @@ icubeds_search <- ahd_spec_search %>% html_elements("noborder nomargin")
 #grab in the results from the specifc location 
 specifcHospital <- icubeds_search %>% 
   html_elements("valign=top align=right")
+
 
 
 
