@@ -1,4 +1,4 @@
- # Automated Web Scraping in R
+# Automated Web Scraping in R
 #last updated 
 #every identification & characteristics 
 
@@ -24,7 +24,7 @@ library(rvest)
 # tx_location = grep("TX \\(Texas\\)", texasSelection)[1]
 
 ##########################################
-# Get the url for each TX hospital profile
+# Get the url for each TX hospital FREE profile
 ##########################################
 
 #grab in the results from the specific location 
@@ -54,14 +54,37 @@ tx_hosp_names = df_sub %>%
 
 write.csv(tx_hosp_names, "all_TX_hospital_urls.csv", row.names=F)
 
+
+
+
+
 # https://www.ahd.com/free_profile/450890/_Baylor_Scott_%26_White_Medical_Center__Plano/Plano/Texas/
-open_hosp_free_profile = read_html(paste0("https://www.ahd.com/free_profile", CCN, + "/" + NAME
-                                          + "/" + CITY + "/" + CITY + "/" + STATE))
+# tx_hosp_names[row, column] in a data frame
+#make sure to run the verification before running the scraper 
+hosp_features = list()
+for(i in 2:40){ # nrow(tx_hosp_names)
+  open_hosp_free_profile = read_html( paste0("https://www.ahd.com", tx_hosp_names[i, "href"]) ) # 
+  
+  # logged in link: "https://www.ahd.com/profile.php?hcfa_id=d6356f47ff83e8b7e8959d1828d32614&ek=4d97a78b10bbb844da7f61504e8eaa01"
+  
+  hosp_features[[i]] <- open_hosp_free_profile %>% 
+    html_elements("tr") %>% 
+    html_text2()
+  
+  if(length(hosp_features[[i]]) < 10){
+    print(paste0("need to verify not a robot to continue /n Rerun from i = ", i) )
+    break 
+  }
+  
+  print(paste0("i = ", i, " finsihed"))
+} # end for i
+
+ 
 
 
 # get info about hospital and put in a data frame with column header
 # turn list of urls into a dataframe
-hosp_data = bind_rows(lapply(xml2::xml_attrs(test), 
+hosp_data = bind_rows(lapply(xml2::xml_attrs(hosp_features), 
                              function(x) 
                                data.frame(as.list(x), 
                                           stringsAsFactors=FALSE)))
@@ -76,20 +99,13 @@ df_sub_name = df[grep("Hospital>", df$href), 1]
 df_sub_city = df[grep("<td>", df$href), 1]
 
 
-#choose from each profile: 
-ahd_spec_search <- read_html("https://www.ahd.com/profile.php?hcfa_id=3a8b9dbfa10b05a69002415f1c684e6f&ek=146539cb7a912eab199d255646dff909")
-
 
 #grab the name, city, ICU beds 
 name <- ahd_spec_search %>% html_elements("name= top")
 cmsnum <- ahd_spec_search %>% html_elements("abbr")
 icubeds_search <- ahd_spec_search %>% html_elements("noborder nomargin")
+write.csv(icuebds_search, "Desktop/R-Studio/csv/beds.csv”, row.names=F")
 
 #grab in the results from the specifc location 
 specifcHospital <- icubeds_search %>% 
   html_elements("valign=top align=right")
-
-
-
-
-
