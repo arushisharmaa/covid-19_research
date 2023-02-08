@@ -52,17 +52,18 @@ tx_hosp_names = df_sub %>%
   mutate(across('NAME', str_replace_all, "%26", "&")) %>%
   mutate(across('NAME', str_replace_all, "%27", "'"))
 
+##REPLACE WITH THE SIGNED IN NAMES AND URLS 
+# Last ran on Feb. 8, 2023
 write.csv(tx_hosp_names, "all_TX_hospital_urls.csv", row.names=F)
 
-
-
-
+# Instead of running code above just open what we previously saved
+tx_hosp_names = read_csv("all_TX_hospital_urls.csv")
 
 # https://www.ahd.com/free_profile/450890/_Baylor_Scott_%26_White_Medical_Center__Plano/Plano/Texas/
 # tx_hosp_names[row, column] in a data frame
 #make sure to run the verification before running the scraper 
 hosp_features = list()
-for(i in 2:40){ # nrow(tx_hosp_names)
+for(i in 22:40){ # nrow(tx_hosp_names)
   open_hosp_free_profile = read_html( paste0("https://www.ahd.com", tx_hosp_names[i, "href"]) ) # 
   
   # logged in link: "https://www.ahd.com/profile.php?hcfa_id=d6356f47ff83e8b7e8959d1828d32614&ek=4d97a78b10bbb844da7f61504e8eaa01"
@@ -79,8 +80,11 @@ for(i in 2:40){ # nrow(tx_hosp_names)
   print(paste0("i = ", i, " finsihed"))
 } # end for i
 
- 
 
+temp_feat = as_tibble(hosp_features[[1]])
+
+
+############ Old code #############
 
 # get info about hospital and put in a data frame with column header
 # turn list of urls into a dataframe
@@ -90,14 +94,12 @@ hosp_data = bind_rows(lapply(xml2::xml_attrs(hosp_features),
                                           stringsAsFactors=FALSE)))
 
 
-
 df[grep("Hospital>", df$href), 1]
 
 #must be https://www.ahd.com + what is in df_sub 
 #attempt to grab the name & city of the hospital 
 df_sub_name = df[grep("Hospital>", df$href), 1]
 df_sub_city = df[grep("<td>", df$href), 1]
-
 
 
 #grab the name, city, ICU beds 
@@ -109,3 +111,5 @@ write.csv(icuebds_search, "Desktop/R-Studio/csv/beds.csv”, row.names=F")
 #grab in the results from the specifc location 
 specifcHospital <- icubeds_search %>% 
   html_elements("valign=top align=right")
+
+
