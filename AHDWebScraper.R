@@ -80,9 +80,51 @@ for(i in 22:40){ # nrow(tx_hosp_names)
   print(paste0("i = ", i, " finsihed"))
 } # end for i
 
+#NAME, ADDRESS, PHONE NUMBER, TYPE OF HOSPITAL, Total Staffed Beds, NOTES, CMS Certification Number, Special Care 
+#Routine Services, Hospital Website, 
 
-temp_feat = as_tibble(hosp_features[[1]])
 
+nameOfHospital = (temp_feat[2,])
+View(nameOfHospital)
+
+clean_hosp_features = data.frame()
+for(i in 1:5){
+  # change the hospital
+  temp_feat = as_tibble(hosp_features[[i]])
+  
+  
+  cmsNumCol = temp_feat$value[grep("CMS Certification Number:", temp_feat$value, ignore.case = T )[3]]
+  
+  zipCodeCol = temp_feat$value[grep("ZIP Code", temp_feat$value, ignore.case = T )[2]]
+  loop_names = c("address", "phone")
+  
+  nameAndAddressCol = temp_feat$value[grep("address", temp_feat$value, ignore.case = T )[2]]
+  split = unlist(str_split(nameAndAddressCol, "\t"))
+  data = unlist(str_split(split[2], "\n"))
+  
+  #temp_df = data.frame(name=data[1],  address=data[2])
+  
+  phoneNumCol = temp_feat$value[grep("phone", temp_feat$value, ignore.case = T )[2]]
+  phoneSplit = unlist(str_split(phoneNumCol, "\t"))[2]
+  
+  websiteCol = temp_feat$value[grep("Hospital Website:", temp_feat$value, ignore.case = T )[2]]
+  typeOfHospitalCol = temp_feat$value[grep("type of facility", temp_feat$value, ignore.case = T )[2]]
+  totalStaffedBedsCol = temp_feat$value[grep("Total Staffed Beds:", temp_feat$value, ignore.case = T )[2]]
+  
+  notesCol1 = temp_feat$value[grep("N O T E S", temp_feat$value, ignore.case = T )[2]]
+  notesCol1 = temp_feat$value[grep("N O T E S", temp_feat$value, ignore.case = T )[3]]
+  
+  temp = data.frame(name=data[1], address=data[2], phoneNum = phoneSplit)
+  
+  clean_hosp_features = rbind(clean_hosp_features, temp)
+} # end for i
+
+
+
+# str_split
+# str_replace
+
+#saddressOfHospitalCol
 
 ############ Old code #############
 
@@ -111,5 +153,3 @@ write.csv(icuebds_search, "Desktop/R-Studio/csv/beds.csv”, row.names=F")
 #grab in the results from the specifc location 
 specifcHospital <- icubeds_search %>% 
   html_elements("valign=top align=right")
-
-
