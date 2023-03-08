@@ -17,6 +17,8 @@ tx_hosp_zcta_pairs = read_csv("INPUT_DATA/PUDF_DATA/cov_flu_patient_hosp_zcta_pa
 sub_zcta_hosp_pairs = tx_hosp_zcta_pairs %>%
   filter(ZCTA_CITY_NAME %in% c("Houston", "Austin", "Dallas"))
 
+austin_zcta_hosp_pairs = tx_hosp_zcta_pairs %>%
+  filter(ZCTA_CITY_NAME == "Austin")
 #pull the names of the columns 
 names(tx_hosp_zcta_pairs)
 
