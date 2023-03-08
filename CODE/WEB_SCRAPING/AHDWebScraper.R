@@ -23,56 +23,59 @@ library(rvest)
 # #large text file to find a specific value
 # tx_location = grep("TX \\(Texas\\)", texasSelection)[1]
 
-##########################################
+################################################
 # Get the url for each TX hospital FREE profile
-##########################################
+################################################
+if(!file.exists("all_TX_hospital_urls.csv")){ # update path when we make sub-folders
+  #grab in the results from the specific location 
+  # I have to manually open link in Chrome and select "I'm not a robot" for this to work
+  tx_search = read_html("https://www.ahd.com/list_cms.php?mstate%5B%5D=TX&listing=1&viewmap=0#") %>% 
+    html_elements("a")
+  
+  # turn list of urls into a dataframe
+  df = bind_rows(lapply(xml2::xml_attrs(tx_search), 
+                        function(x) 
+                          data.frame(as.list(x), 
+                                     stringsAsFactors=FALSE)))
+  
+  # get only urls for the free profiles
+  df_sub = df %>%
+    select(href) %>%
+    filter(grepl("free_profile", href)) %>%
+    distinct()
+  
+  # separate urls into useful info about each hospital
+  tx_hosp_names = df_sub %>%
+    separate(href, into=c("n1", "prof", "CCN", "NAME", "CITY", "STATE", "n2"), sep="/", remove=F) %>% # , remove=F
+    select(-n1, -n2, -prof) %>%
+    mutate(across('NAME', str_replace_all, "_", " ")) %>%
+    mutate(across('NAME', str_replace_all, "%26", "&")) %>%
+    mutate(across('NAME', str_replace_all, "%27", "'"))
+  
+  ##REPLACE WITH THE SIGNED IN NAMES AND URLS 
+  # Last ran on Feb. 8, 2023
+  write.csv(tx_hosp_names, "all_TX_hospital_urls.csv", row.names=F)
+}
 
-#grab in the results from the specific location 
-# I have to manually open link in Chrome and select "I'm not a robot" for this to work
-tx_search = read_html("https://www.ahd.com/list_cms.php?mstate%5B%5D=TX&listing=1&viewmap=0#") %>% 
-  html_elements("a")
 
-# turn list of urls into a dataframe
-df = bind_rows(lapply(xml2::xml_attrs(tx_search), 
-                      function(x) 
-                        data.frame(as.list(x), 
-                                   stringsAsFactors=FALSE)))
-
-# get only urls for the free profiles
-df_sub = df %>%
-  select(href) %>%
-  filter(grepl("free_profile", href)) %>%
-  distinct()
-
-# separate urls into useful info about each hospital
-tx_hosp_names = df_sub %>%
-  separate(href, into=c("n1", "prof", "CCN", "NAME", "CITY", "STATE", "n2"), sep="/", remove=F) %>% # , remove=F
-  select(-n1, -n2, -prof) %>%
-  mutate(across('NAME', str_replace_all, "_", " ")) %>%
-  mutate(across('NAME', str_replace_all, "%26", "&")) %>%
-  mutate(across('NAME', str_replace_all, "%27", "'"))
-
-##REPLACE WITH THE SIGNED IN NAMES AND URLS 
-# Last ran on Feb. 8, 2023
-write.csv(tx_hosp_names, "all_TX_hospital_urls.csv", row.names=F)
-
+###################################################################
 # Instead of running code above just open what we previously saved
 tx_hosp_names = read_csv("all_TX_hospital_urls.csv")
 
 # https://www.ahd.com/free_profile/450890/_Baylor_Scott_%26_White_Medical_Center__Plano/Plano/Texas/
 # tx_hosp_names[row, column] in a data frame
 #make sure to run the verification before running the scraper 
-hosp_features = list()
+hosp_features_free = list()
 for(i in 22:40){ # nrow(tx_hosp_names)
   open_hosp_free_profile = read_html( paste0("https://www.ahd.com", tx_hosp_names[i, "href"]) ) # 
   
   # logged in link: "https://www.ahd.com/profile.php?hcfa_id=d6356f47ff83e8b7e8959d1828d32614&ek=4d97a78b10bbb844da7f61504e8eaa01"
   
-  hosp_features[[i]] <- open_hosp_free_profile %>% 
+  hosp_features_free[[i]] <- open_hosp_free_profile %>% 
     html_elements("tr") %>% 
     html_text2()
   
-  if(length(hosp_features[[i]]) < 10){
+  if(length(hosp_features_free[[i]]) < 10){
     print(paste0("need to verify not a robot to continue /n Rerun from i = ", i) )
     break 
   }
