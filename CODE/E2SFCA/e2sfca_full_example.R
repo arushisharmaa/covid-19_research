@@ -12,9 +12,13 @@ library(tidyverse)
 # These files are too large for GitHub and cannot be made available to the public
 
 # All of Texas, so filter to 
-tx_hosp_zcta_pairs = read_csv("INPUT_DATA/PUDF_DATA/cov_flu_patient_hosp_zcta_pairs.csv")
+tx_hosp_zcta_pairs = read_csv("INPUT_DATA/PUDF_DATA/cov_flu_patient_hosp_zcta_pairs.csv") 
 
+sub_zcta_hosp_pairs = tx_hosp_zcta_pairs %>%
+  filter(ZCTA_CITY_NAME %in% c("Houston", "Austin", "Dallas"))
 
+#pull the names of the columns 
+names(tx_hosp_zcta_pairs)
 
 # Get the longest drive time experienced by any patient
 d0=90 #max(pos_cases$drive_time) # 86 # threshold driving time from i=origin=zip_centroid to j=hospitals
