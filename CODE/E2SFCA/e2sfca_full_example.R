@@ -11,21 +11,31 @@ library(tidyverse)
 # https://utexas.box.com/s/ni4iuw6z725s2evlwxdxeiiwbsigofwa
 # These files are too large for GitHub and cannot be made available to the public
 
-# All of Texas, so filter to 
-tx_hosp_zcta_pairs = read_csv("INPUT_DATA/PUDF_DATA/cov_flu_patient_hosp_zcta_pairs.csv") 
+# All of Texas
+tx_hosp_zcta_pairs = read_csv("INPUT_DATA/PUDF_DATA/cov_flu_patient_hosp_zcta_pairs.csv")
 
+# filter to cities of interest initially
 sub_zcta_hosp_pairs = tx_hosp_zcta_pairs %>%
-  filter(ZCTA_CITY_NAME %in% c("Houston", "Austin", "Dallas"))
+  filter(ZCTA_CITY_NAME %in% c("Austin")) # , "Dallas", "Houston"
 
-austin_zcta_hosp_pairs = tx_hosp_zcta_pairs %>%
-  filter(ZCTA_CITY_NAME == "Austin")
-#pull the names of the columns 
+# austin_zcta_hosp_pairs = tx_hosp_zcta_pairs %>%
+#   filter(ZCTA_CITY_NAME == "Austin")
+
+# pull the names of the columns just to see how to re-name things below
 names(tx_hosp_zcta_pairs)
 
 # Get the longest drive time experienced by any patient
-d0=90 #max(pos_cases$drive_time) # 86 # threshold driving time from i=origin=zip_centroid to j=hospitals
+d0=90 #max(pos_cases$drive_time) # threshold driving time from i=origin=zip_centroid to j=hospitals
 
-all_dt = rep(pos_cases$drive_time, pos_cases$cases) # repeat all drive times for as many cases went from ZCTA i to hospital j
+# Duration should be a matrix of all the travel times between origins and destinations
+org_dest_dt = data.frame(org=sub_zcta_hosp_pairs$ZCTA, 
+                      dest=sub_zcta_hosp_pairs$PUDF_HOSP_NAME, 
+                      drive_time=sub_zcta_hosp_pairs$drive_time)
+
+duration = org_dest_dt %>%
+   spread(dest, drive_time) # dest becomes column names and org is row, filled with drive_time
+
+all_dt = rep(sub_zcta_hosp_pairs$drive_time, sub_zcta_hosp_pairs$TOTAL_PAT_VISIT) # repeat all drive times for as many cases went from ZCTA i to hospital j
 #write.csv(all_dt, "produced_data/drive_time_example.csv", row.names = F)
 cum_prob = rep(0, d0+1) # initialize the cumulative prob vector
 for(i in 0:d0){ #i=0
@@ -35,6 +45,53 @@ for(i in 0:d0){ #i=0
 } # end for to get cumulative probability
 obs_decay_df = data.frame(d = seq(0, d0, 1), cum_prob = cum_prob)
 
+
+##########################################
+# Create function output based on cum_prob
+##########################################
+
+# Exponential decay function
+exponential = nls(cum_prob~exp(-alpha*d), 
+                  data = obs_decay_df, start = list(alpha = 1), trace = TRUE)
+obs_decay_df$exp=predict(exponential, list(x=obs_decay_df$d))
+coef(exponential)
+
+# Gaussian decay
+gaus = nls(cum_prob~exp((-d^2)/alpha), 
+           data = obs_decay_df, start = list(alpha = 1), trace = TRUE)
+obs_decay_df$gaus = predict(gaus, list(x=obs_decay_df$d))
+coef(gaus)
+
+# Downward Log Logistic
+dll = nls(cum_prob~1/(1+(d/alpha)^beta), 
+          data = obs_decay_df, start = list(alpha = 1, beta=5), trace = TRUE)
+obs_decay_df$dll = predict(dll, list(x=obs_decay_df$d))
+coef(dll)
+
+# Logistic Cumulative Distance Function
+lcdf = nls(cum_prob~(1+exp(-alpha/beta))/(1+exp((d-alpha)/beta)), 
+           data = obs_decay_df, start = list(alpha = 1, beta=10), trace = TRUE)
+obs_decay_df$lcdf = predict(lcdf, list(x=obs_decay_df$d))
+coef(lcdf)
+
+colors = c("EXP" = "blue", "DLL" = "red", "GAUS" = "green", "LCDF"="pink", "SCAM"="black")
+shapes = c("Observed"=1)
+fit=ggplot(obs_decay_df, aes(x=d))+
+  geom_point(aes(y=cum_prob, shape="Observed"))+
+  geom_line(aes( y=exp,  color="EXP"))+
+  geom_line(aes( y=gaus, color="GAUS"))+
+  geom_line(aes( y=dll,  color="DLL"))+
+  geom_line(aes( y=lcdf, color="LCDF"))+
+  #geom_line(aes( y=scam, color="SCAM"))+
+  labs(x="Drive Time", y="W, Cumulative Probability", color="Decay Fnct", shape=element_blank())+
+  scale_color_manual(values = colors)+
+  scale_shape_manual(values = shapes)+
+  theme_bw()
+
+png(file="FIGURES/drivetime_decay_fitted.png",
+    width=5.25,height=4.25, units = "in", res=1200)
+plot(fit)
+dev.off()
 
 #######################
 #### Set variables ####
