@@ -1,12 +1,12 @@
 #01/17/2024: 
-#have one column for the fold name, one column for the accuracy value and one column for what type of data it is 
-#(ex: multinominal, logistic, regression)
+
 library(randomForest)  # For random forest modeling
 library(tidyverse)     # For data manipulation and visualization
 library(nnet)          # For neural network modeling
 library(caret)         # For the plotting models
+library(neuralnet)
 
-# Function to perform Multinomial Logistic Regression and Random Forest with cross-validation
+# Function to perform Multinomial Logistic Regression, Neural Network, and Random Forest with cross-validation
 perform_cross_validation <- function(dataset, num_folds) {
   
   # Step 1: Data Preparation
@@ -19,12 +19,14 @@ perform_cross_validation <- function(dataset, num_folds) {
   cv_indices <- createFolds(sub_df$THCIC_ID, k = num_folds)
   
   # Create empty data frame to store evaluation metrics
-  evaluation_metrics_df <- list(
+  evaluation_metrics_df <- data.frame(
     Fold = integer(),
     Train_Data = list(),
     Test_Data = list(),
     Multinom_Model = list(),
     Multinom_ConfusionMatrix = list(),
+    Neural_Network_Model = list(),
+    Neural_Network_ConfusionMatrix = list(),
     RF_Model = list(),
     RF_ConfusionMatrix = list(),
     Variable_Importance = list(),
@@ -48,6 +50,13 @@ perform_cross_validation <- function(dataset, num_folds) {
     predicted_data <- predict(multinom_model, newdata = test_data)
     cm_multinom <- confusionMatrix(table(test_data$THCIC_ID, predicted_data))
     
+    # Neural Network Model
+    nn_model <- neuralnet(THCIC_ID ~ RACE + ZCTA_SVI + drive_time + SPEC_UNIT_1 + ETHNICITY + PAT_AGE_ORDINAL, data = train_data, hidden = c(5, 3), linear.output = TRUE)
+    
+    # Predictions and evaluation
+    predicted_data_nn <- predict(nn_model, newdata = test_data)
+    
+    
     # Build a Random Forest Model & Check the Accuracy 
     rf_model <- randomForest(THCIC_ID ~ RACE + ZCTA_SVI + drive_time + SPEC_UNIT_1 + ETHNICITY + PAT_AGE_ORDINAL, data = train_data)
     predicted_data_rf <- predict(rf_model, newdata = test_data)
@@ -65,6 +74,8 @@ perform_cross_validation <- function(dataset, num_folds) {
         Test_Data = list(test_data),
         Multinom_Model = list(multinom_model),
         Multinom_ConfusionMatrix = list(cm_multinom),
+        Neural_Network_Model = list(nn_model),
+        Neural_Network_ConfusionMatrix = list(cm_nn),
         RF_Model = list(rf_model),
         RF_ConfusionMatrix = list(confusionMatrix(as.factor(predicted_data_rf), as.factor(test_data$THCIC_ID))),
         Variable_Importance = list(var_importance), 
@@ -73,16 +84,28 @@ perform_cross_validation <- function(dataset, num_folds) {
   }
   
   # Compare results across folds
-  multinom_accuracies <- sapply(evaluation_metrics_df$Multinom_ConfusionMatrix, function(cm) cm$overall["Accuracy"])
+  multinom_accuracies <- numeric(length(evaluation_metrics_df$Multinom_ConfusionMatrix))
+  
+  # Loop through each confusion matrix and calculate accuracy
+  for (i in seq_along(evaluation_metrics_df$Multinom_ConfusionMatrix)) {
+    cm <- evaluation_metrics_df$Multinom_ConfusionMatrix[[i]]
+    multinom_accuracies[i] <- cm$overall["Accuracy"]
+  }
+  
+  # Print or visualize the accuracies
+  cat("Multinomial Logistic Regression Accuracies:\n")
+  print(multinom_accuracies)
   
   # Print or visualize the results
   cat("Multinomial Logistic Regression Accuracies:\n")
   print(multinom_accuracies)
   
+
+  
   View(evaluation_metrics_df)
   return(evaluation_metrics_df)
-  
 }
+
 
 # Function to print out the results from the metrics data frame 
 print_fold_results <- function(result, fold_value) {
