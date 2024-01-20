@@ -1,6 +1,10 @@
 # Folders to ignore due to size/privacy
 INPUT_DATA/PUDF_DATA/
 
+# DS_Store not needed
+.DS_Store
+CODE/.DS_Store
+
 
 # History files
 .Rhistory
