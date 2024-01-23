@@ -1,66 +1,91 @@
 #01/17/2024: 
 
-library(randomForest)  # For random forest modeling
-library(tidyverse)     # For data manipulation and visualization
-library(nnet)          # For neural network modeling
-library(caret)         # For the plotting models
-library(neuralnet)
+# Load libraries, add more to libs as needed
+libs = c("randomForest", # For random forest modeling
+         "tidyverse",    # For data manipulation and visualization
+         "caret",        # For the plotting models
+         "nnet",         # For multinom model
+         "neuralnet")    # Neural net example
+invisible(lapply(libs, library, character.only = TRUE))
 
 # Function to perform Multinomial Logistic Regression, Neural Network, and Random Forest with cross-validation
-perform_cross_validation <- function(dataset, num_folds) {
+perform_cross_validation <- function(dataset, num_folds=NA, seed=NA) {
+  # Step 1: Data cleaning moved outside function
+  # Could add a step to ensure you've passed clean data/check the feature types and correct them here
   
-  # Step 1: Data Preparation
-  sub_df <- dataset %>%
-    select(THCIC_ID, RACE, ZCTA_SVI, drive_time, SPEC_UNIT_1, PAT_AGE_ORDINAL, ETHNICITY) %>%
-    mutate(THCIC_ID = as.factor(THCIC_ID), RACE = as.factor(RACE))
+  # Filter out any classes with too few observations, here we're doing 10% of data in each class minimum
+  class_proportion = data.frame(table(dataset$THCIC_ID)/nrow(dataset)*100) %>%
+    filter(Freq>=10) # we'll only keep classes with at least 10% of data
+  dataset = dataset %>%
+    filter(THCIC_ID %in% class_proportion$Var1)
+  dataset$THCIC_ID <- droplevels(dataset$THCIC_ID) # remove empty levels from analyses below
+  #levels(dataset$THCIC_ID) # personal check to see levels were successfully dropped
   
-  # Step 2: Define the number of folds for cross-validation
-  set.seed(123)  # For reproducibility
-  cv_indices <- createFolds(sub_df$THCIC_ID, k = num_folds)
+  # If seed is defined by user, then use it. Otherwise will be chosen randomly.
+  if(!is.na(seed)){ 
+    set.seed(seed)  # For reproducibility
+  } # end if
   
-  # Create empty data frame to store evaluation metrics
-  evaluation_metrics_df <- data.frame(
+  # Step 2: Choose data for each fold of cross-validation
+  # Should possibly check there is enough data for the requested number of folds
+  # ideally we'll do 80/20 split for data for train/test
+  target_num_per_test = round(0.2*nrow(dataset), 0) # 20% of data in test => 80% to train
+  target_num_fold = round(nrow(dataset)/target_num_per_test, 0)
+  if(!is.na(num_folds)){
+    k=num_folds
+    warning(paste0("You set num_folds=", num_folds, "\n 80% of data for training would be k=", target_num_fold))
+  }else{
+    k=target_num_fold 
+  } # end if
+  
+  # This function create k equal size, independent subsets of data
+  cv_indices <- createFolds(dataset$THCIC_ID, k = k) 
+  
+  # Create tibble of empty lists to store evaluation metrics since R doesn't have dictionaries
+  evaluation_metrics_df <- tibble(
     Fold = integer(),
     Train_Data = list(),
     Test_Data = list(),
     Multinom_Model = list(),
     Multinom_ConfusionMatrix = list(),
-    Neural_Network_Model = list(),
-    Neural_Network_ConfusionMatrix = list(),
+    #Neural_Network_Model = list(),
+    #Neural_Network_ConfusionMatrix = list(),
     RF_Model = list(),
     RF_ConfusionMatrix = list(),
-    Variable_Importance = list(),
-    stringsAsFactors = FALSE
-  )
-  
+    Variable_Importance = list()
+    #stringsAsFactors = FALSE
+    )
+
   # Loop through folds
-  for (fold in seq_along(cv_indices)) {
+  for(fold in seq_along(cv_indices)){
     train_indices <- unlist(cv_indices[-fold])
-    test_indices <- unlist(cv_indices[fold])
+    test_indices  <- unlist(cv_indices[fold])
     
-    train_data <- sub_df[train_indices, ]
-    test_data <- sub_df[test_indices, ]
+    train_data <- dataset[train_indices, ]
+    test_data  <- dataset[test_indices, ]
     
-    cat(paste("Fold:", fold, ", Training Data Size:", nrow(train_data), ", Test Data Size:", nrow(test_data)), "\n")
+    cat(paste0("Fold:", fold, ", Training Data Size:", nrow(train_data), ", Test Data Size:", nrow(test_data)), "\n")
     
     # Multinomial Logistic Regression
-    multinom_model <- multinom(THCIC_ID ~ RACE + ZCTA_SVI + drive_time + SPEC_UNIT_1 + ETHNICITY + PAT_AGE_ORDINAL, data = train_data, maxit = 1000)
+    multinom_model <- 
+                multinom(THCIC_ID ~ RACE + ZCTA_SVI + drive_time + SPEC_UNIT_1 + ETHNICITY + PAT_AGE_ORDINAL, 
+                         data = train_data, maxit = 1000, trace=F) # trace default is TRUE to see convergence
     
     # Predictions and evaluation
     predicted_data <- predict(multinom_model, newdata = test_data)
     cm_multinom <- confusionMatrix(table(test_data$THCIC_ID, predicted_data))
     
     # Neural Network Model
-    nn_model <- neuralnet(THCIC_ID ~ RACE + ZCTA_SVI + drive_time + SPEC_UNIT_1 + ETHNICITY + PAT_AGE_ORDINAL, data = train_data, hidden = c(5, 3), linear.output = TRUE)
+    #nn_model <- neuralnet(THCIC_ID ~ RACE + ZCTA_SVI + drive_time + SPEC_UNIT_1 + ETHNICITY + PAT_AGE_ORDINAL, data = train_data, hidden = c(5, 3), linear.output = TRUE)
     
     # Predictions and evaluation
-    predicted_data_nn <- predict(nn_model, newdata = test_data)
+    #predicted_data_nn <- predict(nn_model, newdata = test_data)
     
     
     # Build a Random Forest Model & Check the Accuracy 
     rf_model <- randomForest(THCIC_ID ~ RACE + ZCTA_SVI + drive_time + SPEC_UNIT_1 + ETHNICITY + PAT_AGE_ORDINAL, data = train_data)
     predicted_data_rf <- predict(rf_model, newdata = test_data)
-    confusionMatrix(as.factor(predicted_data_rf), as.factor(test_data$THCIC_ID))
+    rf_conf_mat <- confusionMatrix(as.factor(predicted_data_rf), as.factor(test_data$THCIC_ID))
     
     # Calculate variable importance for Random Forest
     var_importance <- importance(rf_model)
@@ -69,42 +94,74 @@ perform_cross_validation <- function(dataset, num_folds) {
     evaluation_metrics_df <- bind_rows(
       evaluation_metrics_df,
       tibble(
-        Fold = fold,
-        Train_Data = list(train_data),
-        Test_Data = list(test_data),
-        Multinom_Model = list(multinom_model),
-        Multinom_ConfusionMatrix = list(cm_multinom),
-        Neural_Network_Model = list(nn_model),
-        Neural_Network_ConfusionMatrix = list(cm_nn),
-        RF_Model = list(rf_model),
-        RF_ConfusionMatrix = list(confusionMatrix(as.factor(predicted_data_rf), as.factor(test_data$THCIC_ID))),
-        Variable_Importance = list(var_importance), 
+        Fold                            = fold,
+        Train_Data                      = list(train_data),
+        Test_Data                       = list(test_data),
+        Multinom_Model                  = list(multinom_model),
+        Multinom_ConfusionMatrix        = list(cm_multinom),
+        #Neural_Network_Model           = list(nn_model),
+        #Neural_Network_ConfusionMatrix = list(cm_nn),
+        RF_Model                        = list(rf_model),
+        RF_ConfusionMatrix              = list(rf_conf_mat),
+        Variable_Importance             = list(var_importance), 
       )
     )
-  }
+  } # end loop over cv_indices
   
   # Compare results across folds
-  multinom_accuracies <- numeric(length(evaluation_metrics_df$Multinom_ConfusionMatrix))
+  #multinom_accuracies <- numeric(length(evaluation_metrics_df$Multinom_ConfusionMatrix))
   
   # Loop through each confusion matrix and calculate accuracy
-  for (i in seq_along(evaluation_metrics_df$Multinom_ConfusionMatrix)) {
-    cm <- evaluation_metrics_df$Multinom_ConfusionMatrix[[i]]
-    multinom_accuracies[i] <- cm$overall["Accuracy"]
-  }
+  # This could get combined with loop above, unless you want to add some error checks
+  overall_model_summary = data.frame()
+  class_model_summary   = data.frame()
+  for (i in seq_along(cv_indices)){
+    ######
+    # Multinomial regression model summary stats overall and by class
+    mn_cm <- evaluation_metrics_df$Multinom_ConfusionMatrix[[i]]
+    # AccuracyNull = no information rate,"which is taken to be the largest class percentage in the data"
+    # I.e. model should do much better than if we always chose the largest class as our guess
+    mn_accuracies_temp <- data.frame(fold=i, t(mn_cm$overall)) %>%
+      mutate(model="MN")
+    
+    # get Multinomial summary stats for all classes
+    mn_temp = data.frame(fold=i, mn_cm$byClass) %>%
+      rownames_to_column() %>%
+      rename(THCIC_ID=rowname) %>%
+      mutate(THCIC_ID = gsub("Class: ", "", THCIC_ID), # get rid of word class before THCIC_ID
+             model = "MN") # label the model
+    
+    ######
+    # Random Forest model summary stats overall and by class
+    rf_cm = evaluation_metrics_df$RF_ConfusionMatrix[[i]]
+    # the AccuracyNull here is calculated in a different way than just largest class, but need to see how
+    rf_accuracies_temp <- data.frame(fold=i, t(rf_cm$overall)) %>%
+      mutate(model="RF") %>%
+      bind_rows(mn_accuracies_temp)
+    
+    rf_temp = data.frame(fold=i, rf_cm$byClass) %>%
+      rownames_to_column() %>%
+      rename(THCIC_ID=rowname) %>%
+      mutate(THCIC_ID = gsub("Class: ", "", THCIC_ID),
+             model = "RF") %>% # get rid of word class before THCIC_ID
+      bind_rows(mn_temp)
+    
+    # rbind each summary stats from all folds
+    overall_model_summary  = rbind(overall_model_summary, rf_accuracies_temp)
+    class_model_summary = rbind(class_model_summary, rf_temp)
+  } # end for i
+  
+  # Write our model summary stats to file easy to use for plotting later
+  write.csv( overall_model_summary, paste0("OUTPUT_DATA/model_compare_accuries_", Sys.Date(), ".csv"), row.names = F)
+  write.csv( class_model_summary,   paste0("OUTPUT_DATA/model_class_compare_",    Sys.Date(), ".csv"), row.names = F)
   
   # Print or visualize the accuracies
-  cat("Multinomial Logistic Regression Accuracies:\n")
-  print(multinom_accuracies)
+  #cat("Multinomial Logistic Regression Accuracies:\n")
+  #print(multinom_accuracies)
   
-  # Print or visualize the results
-  cat("Multinomial Logistic Regression Accuracies:\n")
-  print(multinom_accuracies)
-  
-
-  
-  View(evaluation_metrics_df)
+  #View(evaluation_metrics_df)
   return(evaluation_metrics_df)
-}
+} # end function perform_cross_validation
 
 
 # Function to print out the results from the metrics data frame 
@@ -155,30 +212,6 @@ print_accuracies <- function(result, fold_value, matrix_type) {
   # Return the data frame if needed
   return(accuracies)
 }
-
-
-# Set working directory
-setwd("/Users/arushishaarma/Documents/GitHub/covid-19_research/")
-getwd()
-
-# Read the CSV file into a data frame
-num_folds = 10
-INPUT_DATA = read_csv("INPUT_DATA/austin_only_onehot_pudf_2018Q1.csv")
-result <- perform_cross_validation(INPUT_DATA, num_folds)
-
-fold_value = 8
-print_fold_results(result, fold_value)
-
-fold_value = 8
-#matrix_type <- "RF_ConfusionMatrix"
-matrix_type <- "Multinom_ConfusionMatrix"
-accur <-print_accuracies(result, fold_value, matrix_type)
-
-
-print(result$RF_ConfusionMatrix[[5]]$overall[3])
-
-histogram(INPUT_DATA$LENGTH_OF_STAY) 
-plot(INPUT_DATA$LENGTH_OF_STAY, INPUT_DATA$drive_time)
 
 
 
