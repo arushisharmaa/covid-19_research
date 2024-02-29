@@ -1,11 +1,10 @@
-#01/17/2024: 
-
 # Load libraries, add more to libs as needed
 libs = c("randomForest", # For random forest modeling
          "tidyverse",    # For data manipulation and visualization
          "caret",        # For the plotting models
          "nnet",         # For multinom model
-         "neuralnet")    # Neural net example
+         "neuralnet",    # Neural net example
+         "xgboost")     # For gradient boosting
 invisible(lapply(libs, library, character.only = TRUE))
 
 # Function to perform Multinomial Logistic Regression, Neural Network, and Random Forest with cross-validation
@@ -20,7 +19,7 @@ perform_cross_validation <- function(dataset, num_folds=NA, seed=NA) {
     filter(THCIC_ID %in% class_proportion$Var1)
   dataset$THCIC_ID <- droplevels(dataset$THCIC_ID) # remove empty levels from analyses below
   #levels(dataset$THCIC_ID) # personal check to see levels were successfully dropped
-  
+ 
   # If seed is defined by user, then use it. Otherwise will be chosen randomly.
   if(!is.na(seed)){ 
     set.seed(seed)  # For reproducibility
@@ -81,6 +80,23 @@ perform_cross_validation <- function(dataset, num_folds=NA, seed=NA) {
     # Predictions and evaluation
     #predicted_data_nn <- predict(nn_model, newdata = test_data)
     
+  
+    
+    # # Boosted Regression Tree (XGBoost)
+    # xgb_model <- xgboost(data = as.matrix(train_data[, -1]),
+    #                      label = as.numeric(train_data$THCIC_ID), 
+    #                      nrounds = 100,
+    #                      objective = "multi:softprob",
+    #                      num_class = length(levels(train_data$THCIC_ID))) 
+    # 
+    # xgb_predictions <- predict(xgb_model, as.matrix(test_data[, -1])) 
+    # 
+    # # Convert predicted labels to class names based on index
+    # xgb_pred_class <- levels(train_data$THCIC_ID)[max.col(xgb_predictions)]
+    # 
+    # xgb_cm <- confusionMatrix(as.factor(xgb_pred_class), as.factor(test_data$THCIC_ID))
+
+    
     
     # Build a Random Forest Model & Check the Accuracy 
     rf_model <- randomForest(THCIC_ID ~ RACE + ZCTA_SVI + drive_time + SPEC_UNIT_1 + ETHNICITY + PAT_AGE_ORDINAL, data = train_data)
@@ -99,8 +115,6 @@ perform_cross_validation <- function(dataset, num_folds=NA, seed=NA) {
         Test_Data                       = list(test_data),
         Multinom_Model                  = list(multinom_model),
         Multinom_ConfusionMatrix        = list(cm_multinom),
-        #Neural_Network_Model           = list(nn_model),
-        #Neural_Network_ConfusionMatrix = list(cm_nn),
         RF_Model                        = list(rf_model),
         RF_ConfusionMatrix              = list(rf_conf_mat),
         Variable_Importance             = list(var_importance), 
@@ -195,6 +209,7 @@ print_fold_results <- function(result, fold_value) {
   # Display Variable Importance
   cat("\nVariable Importance:\n")
   print(result$Variable_Importance[[fold_value]])
+
   
 }
 
