@@ -8,16 +8,17 @@ libs = c("randomForest", # For random forest modeling
 invisible(lapply(libs, library, character.only = TRUE))
 
 # Function to perform Multinomial Logistic Regression, Neural Network, and Random Forest with cross-validation
-perform_cross_validation <- function(dataset, num_folds=NA, seed=NA) {
+perform_cross_validation <- function(dataset, num_folds=NA, seed=NA, sub_folder="RESPIRATORY/"){
   # Step 1: Data cleaning moved outside function
   # Could add a step to ensure you've passed clean data/check the feature types and correct them here
   
   # Filter out any classes with too few observations, here we're doing 10% of data in each class minimum
   class_proportion = data.frame(table(dataset$THCIC_ID)/nrow(dataset)*100) %>%
-    filter(Freq>=10) # we'll only keep classes with at least 10% of data
+    filter(Freq>=1) # we'll only keep classes with at least 1% of data
   dataset = dataset %>%
-    filter(THCIC_ID %in% class_proportion$Var1)
-  dataset$THCIC_ID <- droplevels(dataset$THCIC_ID) # remove empty levels from analyses below
+    filter(THCIC_ID %in% class_proportion$Var1) %>%
+    mutate(THCIC_ID = as.factor(THCIC_ID)) %>%
+    droplevels() # remove empty levels from analyses below
   #levels(dataset$THCIC_ID) # personal check to see levels were successfully dropped
  
   # If seed is defined by user, then use it. Otherwise will be chosen randomly.
@@ -71,9 +72,8 @@ perform_cross_validation <- function(dataset, num_folds=NA, seed=NA) {
                          data = train_data, maxit = 1000, trace=F) # trace default is TRUE to see convergence
     
     # Predictions and evaluation
-    predicted_data <- predict(multinom_model, newdata = test_data)
-    cm_multinom <- confusionMatrix(table(test_data$THCIC_ID, predicted_data))
-    
+    predicted_data_mn <- predict(multinom_model, newdata = test_data)
+    cm_multinom <- confusionMatrix(as.factor(predicted_data_mn), as.factor(test_data$THCIC_ID))
     # Neural Network Model
     #nn_model <- neuralnet(THCIC_ID ~ RACE + ZCTA_SVI + drive_time + SPEC_UNIT_1 + ETHNICITY + PAT_AGE_ORDINAL, data = train_data, hidden = c(5, 3), linear.output = TRUE)
     
@@ -166,8 +166,10 @@ perform_cross_validation <- function(dataset, num_folds=NA, seed=NA) {
   } # end for i
   
   # Write our model summary stats to file easy to use for plotting later
-  write.csv( overall_model_summary, paste0("OUTPUT_DATA/model_compare_accuries_", Sys.Date(), ".csv"), row.names = F)
-  write.csv( class_model_summary,   paste0("OUTPUT_DATA/model_class_compare_",    Sys.Date(), ".csv"), row.names = F)
+  if(!dir.exists(paste0("OUTPUT_DATA/", sub_folder))){dir.create(paste0("OUTPUT_DATA/", sub_folder))}
+  sub_string = gsub("/", "", tolower(sub_folder))
+  write.csv( overall_model_summary, paste0("OUTPUT_DATA/", sub_folder, sub_string, "_model_compare_accuracies_", Sys.Date(), ".csv"), row.names = F)
+  write.csv( class_model_summary,   paste0("OUTPUT_DATA/", sub_folder, sub_string, "_model_class_compare_",     Sys.Date(), ".csv"), row.names = F)
   
   # Print or visualize the accuracies
   #cat("Multinomial Logistic Regression Accuracies:\n")
