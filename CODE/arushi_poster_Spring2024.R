@@ -5,7 +5,8 @@
 
 # To Do
 # Save file of data grouped together and add if to check for existence
-
+# Would be easier to have just insured or not
+# fix 0117 algorithm to take in features and not hard code them in equation
 
 # Source functions and load need libraries
 source("CODE/0117_algorithm_hospfind.R")
@@ -53,7 +54,7 @@ pat_per_hosp_df = as.data.frame(table(all_quarter_df$THCIC_ID, all_quarter_df$PR
 
 reduced_hosp_df = all_quarter_df %>%             # 5,892 total hospitalizations
   filter(THCIC_ID %in% pat_per_hosp_df$THCIC_ID) %>% # 5,709
-  separate(DISCHARGE, into = c("YEAR", "QUARTER"), sep = "Q") %>%
+  separate(DISCHARGE, into = c("YEAR", "QUARTER"), sep = "Q", remove = F ) %>%
   mutate(YEAR = as.numeric(YEAR),
          QUARTER = as.numeric(QUARTER)) %>%
   filter(!(TYPE_OF_ADMISSION=="9")) %>% # remove invalid hospital admissions
@@ -94,14 +95,13 @@ count_disease_quarter = reduced_hosp_df %>%
 # Plot by disease and total hospitalizations through time just as visual of pandemic impact on hospitals
 cdq_plot = ggplot(count_disease_quarter, 
                   aes(x=DISCHARGE, y=total_hosp, group=DISEASE, color=DISEASE, shape=DISEASE))+
-  geom_line(alpha=0.5)+
-  geom_point()+
+  geom_line(alpha=0.5, linewidth=2)+
+  geom_point(size=5)+
   scale_x_discrete(guide = guide_axis(angle = 45)) +
   labs(y="Total Austin Respiratory Hospitalizations", x="Year-Quarter of Patient Discharge")+
-  theme_bw(base_size = 20)
+  theme_bw(base_size = 18)
 ggsave(filename="FIGURES/Arushi_Poster/count_disease_quarter_plot.png", plot=cdq_plot, bg="white", 
-       width=9, height=7.5, units="in", dpi=1200)
-
+       width=11, height=7.5, units="in", dpi=1200)
 
 #////////////////
 #### Example ####
@@ -128,32 +128,31 @@ ggsave(filename="FIGURES/Arushi_Poster/drive_time_heatmap.png", plot=dt_heatmap,
 #///////////////////
 # Runs multi-nomial logistic regression and random forest
 
-# Need to remove anything not used as a feature before running models
-
-# Would be easier to have just insured or not
-
+# Model formula run inside function
+# THCIC_ID ~ RACE + ZCTA_SVI + drive_time + SPEC_UNIT_1 + ETHNICITY + PAT_AGE_ORDINAL
 pre_pandemic_df = reduced_hosp_df %>%  
   filter(YEAR <= 2019) %>%
   filter(!(YEAR==2019 & QUARTER==4)) %>% # 1153 total hospitalizations
   select(THCIC_ID, ZCTA_SVI, drive_time, RACE, ETHNICITY,  
-         PAT_AGE_ORDINAL, SPEC_UNIT_1, TYPE_OF_ADMISSION) 
+         PAT_AGE_ORDINAL, SPEC_UNIT_1) # TYPE_OF_ADMISSION made no improvement in model
 pandemic_df = reduced_hosp_df %>%
   filter((YEAR==2019 & QUARTER==4) | (YEAR>=2020)) %>% # 4556 total hospitalizations
   select(THCIC_ID, ZCTA_SVI, drive_time, RACE, ETHNICITY,  
-         PAT_AGE_ORDINAL, SPEC_UNIT_1, TYPE_OF_ADMISSION)
+         PAT_AGE_ORDINAL, SPEC_UNIT_1)
 all_data_df = bind_rows(pre_pandemic_df, pandemic_df)
-
-table(all_data_df$THCIC_ID, all_data_df$SPEC_UNIT_1)
 
 # Did 5 folds => 5-fold cross validation
 nfolds=5
 pre_pand_result = perform_cross_validation(dataset=pre_pandemic_df, 
-                                           seed=123, sub_folder="PRE-PANDEMIC/", num_folds=nfolds)
+                                           sub_folder="PRE-PANDEMIC/", num_folds=nfolds) # seed=123, 
 pandemic_result = perform_cross_validation(dataset=pandemic_df,     
-                                           seed=123, sub_folder="PANDEMIC/",     num_folds=nfolds)
+                                           sub_folder="PANDEMIC/",     num_folds=nfolds) # seed=123, 
 all_data_result = perform_cross_validation(dataset=all_data_df,     
-                                           seed=123, sub_folder="ALL_DATA/",     num_folds=nfolds)
+                                           sub_folder="ALL_DATA/",     num_folds=nfolds) # seed=123, 
 
+#/////////////////////////////////////
+#### Aggregate Confusion Matrices ####
+#/////////////////////////////////////
 # Loop over all the confusion matrices and bind rows together
 pre_confusion = pan_confusion = all_confusion = data.frame()
 for(i in 1:nfolds){
@@ -205,11 +204,18 @@ cm_df_mean = cm_df %>%
                                 Prediction == "852000" ~ "DellChildren - F",
                                 .default = "REMOVE" ))
 
+#//////////////////////////////
+#### Plot Confusion Matrix ####
+#//////////////////////////////
 order=c("PRE", "PAND", "ALL") #  Flu/ILI  Flu/ILI/COVID-19 
-time_label = c(`PRE`="Pre-Pandemic\n2015Q4-2019Q3", `PAND`="Pandemic\n2019Q4-2022Q4", `ALL`="All Hospitalizations\n2015Q4-2022Q4")
+time_label = c(`PRE`="Pre-Pandemic\n2015Q4-2019Q3", `PAND`="Pandemic\n2019Q4-2022Q4", `ALL`="All Admits\n2015Q4-2022Q4")
 army_rose = rev(c("#798234","#a3ad62","#d0d3a2","#fdfbe4","#f0c6c3","#df91a3","#d46780"))
+prediction_order = rev(c("StDavids - A",   "AscSeton - B",    "StDavidsS - C", 
+                     "AscSetonNW - D", "NorthAustin - E", "DellChildren - F"))
 
-mean_cm_plot = ggplot(cm_df_mean, aes(x=Reference, y=Prediction, fill=PERCENT_PREDICT_mean)) +
+mean_cm_plot = ggplot(cm_df_mean, aes(x=Reference, y=factor(Prediction, level=prediction_order),
+                                      fill=PERCENT_PREDICT_mean)) +
+  labs(x="Correct Hospital", y="Predicted Hospital")+
   geom_tile() + theme_bw(base_size=20) + coord_equal() +
     geom_tile(data = cm_df_mean[!is.na(cm_df_mean$DIAG), ], aes(color = DIAG), linewidth = 1) + # add black box around diagonal
   scale_color_manual(guide = "none", values = c(`TRUE` = "black"))+
@@ -222,6 +228,13 @@ mean_cm_plot = ggplot(cm_df_mean, aes(x=Reference, y=Prediction, fill=PERCENT_PR
   #theme(axis.text.x = element_text(angle = 75, vjust = 0.6)) # , hjust=1
 ggsave(filename="FIGURES/Arushi_Poster/mean_confusion_matrix.png", plot=mean_cm_plot, bg="white", 
        width=11, height=9, units="in", dpi=1200)
+
+#///////////////////////////////////////////////
+# RF Permute of best performing Test/Train Split
+#///////////////////////////////////////////////
+
+
+plotTrace(all_data_result$RF_Model[[1]])
 
 
 

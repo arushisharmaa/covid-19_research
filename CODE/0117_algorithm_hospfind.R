@@ -1,5 +1,6 @@
 # Load libraries, add more to libs as needed
 libs = c("randomForest", # For random forest modeling
+         "rfPermute",    # For random forest feature significance
          "tidyverse",    # For data manipulation and visualization
          "caret",        # For the plotting models
          "nnet",         # For multinom model
@@ -73,7 +74,7 @@ perform_cross_validation <- function(dataset, num_folds=NA, seed=NA, sub_folder=
     
     # Predictions and evaluation
     predicted_data_mn <- predict(multinom_model, newdata = test_data)
-    cm_multinom <- confusionMatrix(as.factor(predicted_data_mn), as.factor(test_data$THCIC_ID))
+    cm_multinom <- caret::confusionMatrix(as.factor(predicted_data_mn), as.factor(test_data$THCIC_ID))
     # Neural Network Model
     #nn_model <- neuralnet(THCIC_ID ~ RACE + ZCTA_SVI + drive_time + SPEC_UNIT_1 + ETHNICITY + PAT_AGE_ORDINAL, data = train_data, hidden = c(5, 3), linear.output = TRUE)
     
@@ -95,16 +96,18 @@ perform_cross_validation <- function(dataset, num_folds=NA, seed=NA, sub_folder=
     # xgb_pred_class <- levels(train_data$THCIC_ID)[max.col(xgb_predictions)]
     # 
     # xgb_cm <- confusionMatrix(as.factor(xgb_pred_class), as.factor(test_data$THCIC_ID))
-
     
+    # Build a Balanced Random Forest Model & Check the Accuracy 
+    sampsize = balancedSampsize(train_data$THCIC_ID)
+    rfPermute_model = rfPermute(THCIC_ID ~ RACE + ZCTA_SVI + drive_time + SPEC_UNIT_1 + ETHNICITY + PAT_AGE_ORDINAL, 
+                                data = train_data, ntree = 500, num.rep = 1000, num.cores = 6,
+                                replace = FALSE, sampsize = sampsize)
     
-    # Build a Random Forest Model & Check the Accuracy 
-    rf_model <- randomForest(THCIC_ID ~ RACE + ZCTA_SVI + drive_time + SPEC_UNIT_1 + ETHNICITY + PAT_AGE_ORDINAL, data = train_data)
-    predicted_data_rf <- predict(rf_model, newdata = test_data)
-    rf_conf_mat <- confusionMatrix(as.factor(predicted_data_rf), as.factor(test_data$THCIC_ID))
+    rfPermute_performance = predict(rfPermute_model, newdata = test_data)
+    rf_conf_mat <- caret::confusionMatrix(as.factor(rfPermute_performance), as.factor(test_data$THCIC_ID))
     
-    # Calculate variable importance for Random Forest
-    var_importance <- importance(rf_model)
+    # Calculate variable importance for Balanced Random Forest
+    var_importance <- importance(rfPermute_model)
     
     # Store metrics in the data frame
     evaluation_metrics_df <- bind_rows(
@@ -115,7 +118,7 @@ perform_cross_validation <- function(dataset, num_folds=NA, seed=NA, sub_folder=
         Test_Data                       = list(test_data),
         Multinom_Model                  = list(multinom_model),
         Multinom_ConfusionMatrix        = list(cm_multinom),
-        RF_Model                        = list(rf_model),
+        RF_Model                        = list(rfPermute_model),
         RF_ConfusionMatrix              = list(rf_conf_mat),
         Variable_Importance             = list(var_importance), 
       )
