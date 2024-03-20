@@ -233,8 +233,83 @@ ggsave(filename="FIGURES/Arushi_Poster/mean_confusion_matrix.png", plot=mean_cm_
 # RF Permute of best performing Test/Train Split
 #///////////////////////////////////////////////
 
+# best performing (highest accuracy of all folds/times)
+# The output across folds was really similar and stable
+plotTrace(all_data_result$RF_Model[[2]])
 
-plotTrace(all_data_result$RF_Model[[1]])
+# ggsave wont't save it so doing screen shot for now
+# will probably need to take data and make our own custom ggplot
+# maybe look at function code to get each plot and do cowplot::plot_grid
+plotImportance(all_data_result$RF_Model[[2]])
+
+#///////////////////////////////////////
+#### Multinomial regression summary ####
+#///////////////////////////////////////
+# Doesn't show p-values like we'd like need to find better summary
+summary(all_data_result$Multinom_Model[[2]])
+
+
+
+#/////////////////////////////
+#### Train and Test Count ####
+#/////////////////////////////
+all_data_train = data.frame(table(all_data_result$Train_Data[[1]]$THCIC_ID)) %>% 
+  rename(THCIC_ID = Var1, ALL_DATA_TRAIN = Freq)
+all_data_test = data.frame(table(all_data_result$Test_Data[[1]]$THCIC_ID)) %>% 
+  rename(THCIC_ID = Var1, ALL_DATA_TEST = Freq)
+prepand_data_train = data.frame(table(pre_pand_result$Train_Data[[1]]$THCIC_ID)) %>% 
+  rename(THCIC_ID = Var1, PRE_PAND_TRAIN = Freq)
+prepand_data_test = data.frame(table(pre_pand_result$Test_Data[[1]]$THCIC_ID)) %>% 
+  rename(THCIC_ID = Var1, PRE_PAND_TEST = Freq)
+pand_data_train = data.frame(table(pandemic_result$Train_Data[[1]]$THCIC_ID)) %>% 
+  rename(THCIC_ID = Var1, PANDEMIC_TRAIN = Freq)
+pand_data_test = data.frame(table(pandemic_result$Test_Data[[1]]$THCIC_ID)) %>% 
+  rename(THCIC_ID = Var1, PANDEMIC_TEST = Freq)
+
+temp_hosp_df = pat_per_hosp_df %>%
+  filter(!(Var2=="Seton Medical Center"))
+hosp_name_df$TOTAL_PAT[which(hosp_name_df$THCIC_ID=="497000")] = (127+958)
+hosp_name_df = temp_hosp_df %>%
+  mutate(HOSP_FREQ = TOTAL_PAT/TOTAL_PAT_SUM) %>%
+  rename(HOSP_NAME=Var2) %>%
+  left_join(all_data_train, by="THCIC_ID") %>%
+  left_join(all_data_test, by="THCIC_ID") %>%
+  left_join(prepand_data_train, by="THCIC_ID") %>%
+  left_join(prepand_data_test, by="THCIC_ID") %>%
+  left_join(pand_data_train, by="THCIC_ID") %>%
+  left_join(pand_data_test, by="THCIC_ID")
+  
+
+
+
+
+#///////////////////////////////////////////////////////////////////////
+#### Test BRF performance without the specialty unit they reside in ####
+#///////////////////////////////////////////////////////////////////////
+# SPEC_UNIT_1 could be treated as risk group (high/low = icu/acute)
+# All other features about the patient or ZIP code
+#  could be estimated at census block group level from ACS
+# Work towards proportion of ILI hospitalized in each CBG that will go to
+#  which hospital
+
+train_data = all_data_result$Train_Data[[2]]
+test_data = all_data_result$Test_Data[[2]]
+
+
+
+sampsize = balancedSampsize(train_data$THCIC_ID)
+rfPermute_model = rfPermute(THCIC_ID ~ RACE + ZCTA_SVI + drive_time + ETHNICITY + PAT_AGE_ORDINAL, 
+                            data = train_data, ntree = 500, num.rep = 1000, num.cores = 6,
+                            replace = FALSE, sampsize = sampsize)
+
+rfPermute_performance = predict(rfPermute_model, newdata = test_data)
+
+rf_conf_mat <- caret::confusionMatrix(as.factor(rfPermute_performance), as.factor(test_data$THCIC_ID))
+
+
+all_data_result$RF_ConfusionMatrix[[2]]
+
+
 
 
 
